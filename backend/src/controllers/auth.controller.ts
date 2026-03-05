@@ -3,6 +3,7 @@ import userModel from "../models/user.model.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
+import blackListModel from "../models/blacklist.model.js";
 
 /**
  * @name registerUserController
@@ -77,12 +78,12 @@ export async function loginUserController(req: Request, res: Response) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
-    const isPasswordValid = bcrypt.compare(password, user.password)
+    const isPasswordValid = bcrypt.compare(password, user.password);
 
-    if(!isPasswordValid) {
+    if (!isPasswordValid) {
       return res.status(401).json({
-        message: "Incorrect password"
-      })
+        message: "Incorrect password",
+      });
     }
 
     const token = jwt.sign(
@@ -96,5 +97,59 @@ export async function loginUserController(req: Request, res: Response) {
       message: "User logged in successfully",
       user: { id: user?._id, username: user?.username, email: user?.email },
     });
-  } catch (error) {}
+  } catch (error) {
+    res.status(400).json({
+      error: "Internal server error",
+    });
+  }
+}
+
+/**
+ * @name logoutUserController
+ * @description Controller for user logout
+ * @access Public
+ * @param req
+ * @param res
+ */
+export async function logoutUserController(req: Request, res: Response) {
+  const token = req.cookies.token;
+
+  if (!token) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  await blackListModel.create({ token });
+
+  res.clearCookie("token");
+
+  res.status(200).json({ message: "User logged out successfully" });
+}
+
+/**
+ * @name getMeController
+ * @description Controller getting current logged in user
+ * @access Private
+ * @param req
+ * @param res
+ */
+
+export async function getMeController(req: Request, res: Response) {
+  if (!req.user || typeof req.user === "string") {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const user = await userModel.findById(req.user.id);
+
+  if (!user) {
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  res.status(200).json({
+    message: "User fetch successfully",
+    user: {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+    },
+  });
 }
